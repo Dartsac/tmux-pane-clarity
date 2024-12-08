@@ -1,15 +1,19 @@
 # tmux-clear-panes
 
-`tmux-clear-panes` is a Tmux plugin that provides two modes for managing pane borders:
+`tmux-clear-panes` is a Tmux plugin that customizes the appearance of pane borders dynamically. It currently supports:
 
-- **Stealth Mode:** Pane borders are dim or invisible until more than one pane is present.
-- **Dynamic Mode:** Pane borders dynamically toggle between a visible and hidden state based on the number of panes.
+- **Dynamic Mode**: Pane borders toggle visibility based on the number of panes.
+
+Future updates will include additional modes, such as **Stealth Mode**.
+
+## Features
+- Toggle pane borders dynamically.
+- Seamlessly integrates into your Tmux workflow.
+- Designed for future expansion.
 
 ## Installation
 
-### Using Tmux Plugin Manager (TPM)
-
+### Using TPM (Recommended)
 1. Add the plugin to your `.tmux.conf`:
-
    ```tmux
    set -g @plugin 'Dartsac/tmux-clear-panes'
