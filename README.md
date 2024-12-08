@@ -1,6 +1,6 @@
-# tmux-clear-panes
+# tmux-pane-clarity
 
-`tmux-clear-panes` is a Tmux plugin that customizes the appearance of pane borders dynamically. It currently supports:
+`tmux-pane-clarity` is a Tmux plugin that customizes the appearance of pane borders dynamically. It currently supports:
 
 - **Dynamic Mode**: Pane borders toggle visibility based on the number of panes.
 
@@ -16,4 +16,4 @@ Future updates will include additional modes, such as **Stealth Mode**.
 ### Using TPM (Recommended)
 1. Add the plugin to your `.tmux.conf`:
    ```tmux
-   set -g @plugin 'Dartsac/tmux-clear-panes'
+   set -g @plugin 'Dartsac/tmux-pane-clarity'
