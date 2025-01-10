@@ -1,8 +1,6 @@
 # function to dynamically toggle borders
 bind-key -n M-l run-shell '
   if [ "$(tmux list-panes | wc -l)" -gt 1 ]; then
-    tmux set-option -g pane-border-style "fg=#424450"
-    tmux set-option -g pane-active-border-style "fg=default"
     tmux set-option -g pane-border-status top
     tmux set-option -g pane-border-format "#[bold]#[default]"
   else
@@ -13,8 +11,6 @@ bind-key -n M-l run-shell '
 # hook for after-split-window
 set-hook -g after-split-window "run-shell '
   if [ \"\$(tmux list-panes | wc -l)\" -gt 1 ]; then
-    tmux set-option -g pane-border-style \"fg=#424450\"
-    tmux set-option -g pane-active-border-style \"fg=default\"
     tmux set-option -g pane-border-status top
     tmux set-option -g pane-border-format \"#[bold]#[default]\"
   fi
@@ -23,8 +19,6 @@ set-hook -g after-split-window "run-shell '
 # hook for when the active window in a session changes
 set-hook -g session-window-changed "run-shell '
   if [ \"\$(tmux list-panes | wc -l)\" -gt 1 ]; then
-    tmux set-option -g pane-border-style \"fg=#424450\"
-    tmux set-option -g pane-active-border-style \"fg=default\"
     tmux set-option -g pane-border-status top
     tmux set-option -g pane-border-format \"#[bold]#[default]\"
   else
@@ -35,8 +29,6 @@ set-hook -g session-window-changed "run-shell '
 # hook for client-session-changed 
 set-hook -g client-session-changed "run-shell '
   if [ \"\$(tmux list-panes | wc -l)\" -gt 1 ]; then
-    tmux set-option -g pane-border-style \"fg=#424450\"
-    tmux set-option -g pane-active-border-style \"fg=default\"
     tmux set-option -g pane-border-status top
     tmux set-option -g pane-border-format \"#[bold]#[default]\"
   else
