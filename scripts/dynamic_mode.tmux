@@ -1,44 +1,16 @@
-# function to dynamically toggle borders
-bind-key -n M-l run-shell '
-  if [ "$(tmux list-panes | wc -l)" -gt 1 ]; then
-    tmux set-option -g pane-border-status top
-    tmux set-option -g pane-border-format "#[bold]#[default]"
-  else
-    tmux set-option -g pane-border-status off
-  fi
-'
+# Border-only focus indication. Never change pane contents or backgrounds.
+set-option -g pane-border-lines single
+# Disable half-colouring and arrows so the entire active separator is highlighted.
+set-option -g pane-border-indicators off
+set-option -g pane-border-format ' '
+set-option -g pane-border-style 'fg=#44475a'
+# Keep the active border colour supplied by the user's theme.
+set-option -g pane-border-status off
 
-# hook for after-split-window
-set-hook -g after-split-window "run-shell '
-  if [ \"\$(tmux list-panes | wc -l)\" -gt 1 ]; then
-    tmux set-option -g pane-border-status top
-    tmux set-option -g pane-border-format \"#[bold]#[default]\"
-  fi
-'"
-
-# hook for when the active window in a session changes
-set-hook -g session-window-changed "run-shell '
-  if [ \"\$(tmux list-panes | wc -l)\" -gt 1 ]; then
-    tmux set-option -g pane-border-status top
-    tmux set-option -g pane-border-format \"#[bold]#[default]\"
-  else
-    tmux set-option -g pane-border-status off
-  fi
-'"
-
-# hook for client-session-changed 
-set-hook -g client-session-changed "run-shell '
-  if [ \"\$(tmux list-panes | wc -l)\" -gt 1 ]; then
-    tmux set-option -g pane-border-status top
-    tmux set-option -g pane-border-format \"#[bold]#[default]\"
-  else
-    tmux set-option -g pane-border-status off
-  fi
-'"
-
-# hook for after-kill-pane
-set-hook -g after-kill-pane "run-shell '
-  if [ \"\$(tmux list-panes | wc -l)\" -eq 1 ]; then
-    tmux set-option -g pane-border-status off
-  fi
-'"
+# Floating framed zoom already has its own top/bottom edges: don't add a
+# pane-status line there. Native zoom retains the top line.
+# Target the window that changed, including when a background pane exits.
+# Double hashes defer the condition until if-shell has selected that window.
+set-hook -g window-layout-changed[9431] {
+    run-shell -C 'if-shell -F -t #{hook_window} "##{?@pane_clarity_frame_pane,0,##{>:##{window_panes},1}}" "set-option -w -t #{hook_window} pane-border-status top" "set-option -w -t #{hook_window} pane-border-status off"'
+}
