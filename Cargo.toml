@@ -1,0 +1,16 @@
+[package]
+name = "pane-clarity"
+version = "0.1.0"
+edition = "2021"
+description = "Always-framed tmux panes: layout engine (one process per action)"
+publish = false
+
+# No dependencies: builds offline in seconds.
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "unwind"  # actions catch panics and fall back to native tiled view
