@@ -1,0 +1,46 @@
+#!/bin/sh
+# Pane-clarity tmux adapter. Only pane layout/navigation commands start the
+# engine (which still passes through unless the target window is
+# always-framed); everything else is exec'd straight to the real tmux. Never replace the real
+# tmux binary with this file.
+self=$0
+real=${PANE_CLARITY_REAL_TMUX:-}
+if [ -z "$real" ]; then
+  set -f; old_ifs=$IFS; IFS=:
+  for dir in $PATH; do
+    if [ -n "$dir" ] && [ -x "$dir/tmux" ] && ! [ "$dir/tmux" -ef "$self" ]; then
+      real=$dir/tmux; break
+    fi
+  done
+  IFS=$old_ifs; set +f
+fi
+if [ -z "$real" ]; then
+  echo "pane-clarity: cannot find the real tmux binary" >&2
+  exit 127
+fi
+
+command= skip= direction=
+for arg do
+  if [ -n "$command" ]; then
+    case $arg in -[LRUDl]) direction=1 ;; esac
+  elif [ -n "$skip" ]; then
+    skip=
+  else
+    case $arg in
+      -[LSfTc]) skip=1 ;;  # global option taking a value
+      -*) ;;
+      *) command=$arg ;;
+    esac
+  fi
+done
+
+case $command in
+  select-pane|selectp) [ -n "$direction" ] || exec "$real" "$@" ;;
+  split-window|splitw|resize-pane|resizep|select-layout|selectl|next-layout|nextl) ;;
+  last-pane|lastp|rotate-window|rotatew|swap-pane|swapp|kill-pane|killp) ;;
+  *) exec "$real" "$@" ;;
+esac
+# The Rust engine; until it is built, managed commands pass through unchanged.
+engine=${self%/*}/../target/release/pane-clarity
+[ -x "$engine" ] || exec "$real" "$@"
+PANE_CLARITY_REAL_TMUX=$real exec "$engine" tmux "$@"
