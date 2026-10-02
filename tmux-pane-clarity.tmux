@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Border-only focus indication and framed zoom.
+# Border-only focus indication, framed zoom, and optional always-framed panes.
+# Mode: set -g @pane_clarity_mode 'zoom' (default) | 'always'
 CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SCRIPTS_DIR="$CURRENT_DIR/scripts"
 
@@ -44,4 +45,23 @@ set-hook -g window-resized[9431] {
   }
 }
 EOF
+fi
+
+if [ "$(tmux show-option -gqv @pane_clarity_mode)" = always ]; then
+  # Build the layout engine when missing or older than its sources.
+  binary="$CURRENT_DIR/target/release/pane-clarity"
+  if [ ! -x "$binary" ] || [ -n "$(find "$CURRENT_DIR/src" "$CURRENT_DIR/Cargo.toml" -newer "$binary" 2>/dev/null)" ]; then
+    if ! command -v cargo >/dev/null 2>&1; then
+      tmux display-message "Pane clarity: always mode needs Rust (cargo) to build its engine"
+    else
+      tmux display-message "Pane clarity: building the layout engine..."
+      if ! (cd "$CURRENT_DIR" && cargo build --release --quiet) >/dev/null 2>&1; then
+        tmux display-message "Pane clarity: engine build failed (see: cargo build --release)"
+      fi
+    fi
+  fi
+  python3 "$SCRIPTS_DIR/always_mode.py" enable
+elif [ -n "$(tmux show-option -gqv @pane_clarity_saved_bindings)" ]; then
+  # Mode changed away from 'always' on a running server: roll it back.
+  python3 "$SCRIPTS_DIR/always_mode.py" disable
 fi
