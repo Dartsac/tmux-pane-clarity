@@ -2,6 +2,7 @@
 name = "pane-clarity"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.82"  # Option::is_none_or (1.81 fails to build)
 description = "Always-framed tmux panes: layout engine (one process per action)"
 publish = false
 
