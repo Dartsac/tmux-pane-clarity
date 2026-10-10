@@ -5,6 +5,13 @@ use crate::json::{self, opt_str, Value};
 use crate::tree::{self, frame_boxes, leaves, leaves_mut, lookup, pane, prune, reflow, Node, Pane, Panes, NATIVE_GAPS};
 use crate::{cmd, err, Cmd, Error, Output, Tmux, ACTIVE, BUSY, DIRECTIONS, FRAMED, R, STATE};
 
+/// The window's pane-border-status as this plugin last set it, and the
+/// window's own value from before (scripts/owned.sh has the same rule).
+const BORDER_STATUS: &str = "@pane_clarity_border_status";
+const ORIGINAL_BORDER_STATUS: &str = "@pane_clarity_original_border_status";
+/// States saved by versions that also set these window options on enable.
+const LEGACY_WINDOW_OPTIONS: [(&str, &str); 2] = [("pane-border-lines", "single"), ("pane-border-indicators", "off")];
+
 const PANE_FORMAT: &str = "#{pane_id}\t#{pane_index}\t#{pane_floating_flag}\t#{pane_active}\
                            \t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}";
 
@@ -303,8 +310,29 @@ impl<'a> Manager<'a> {
         self.t.batch(&commands)
     }
 
-    fn border_status(&self) -> Cmd {
-        cmd!["set-option", "-w", "-t", self.window, "pane-border-status", if self.panes.len() > 1 { "top" } else { "off" }]
+    /// Set the window's pane-border-status to `value`, unless the user has set
+    /// it since this plugin did; the first time, keep the window's own value.
+    fn border_status(&self, value: &str) -> R<Vec<Cmd>> {
+        let format = format!("#{{{BORDER_STATUS}}}\t#{{pane-border-status}}");
+        let now = self.t.text(&cmd!["display-message", "-p", "-t", self.window, format])?;
+        let (set, current) = now.split_once('\t').unwrap_or((&now, ""));
+        let mut commands = Vec::new();
+        if set.is_empty() {
+            let own = self.t.text(&cmd!["show-option", "-wqv", "-t", self.window, "pane-border-status"])?;
+            if !own.is_empty() {
+                commands.push(cmd!["set-option", "-w", "-t", self.window, ORIGINAL_BORDER_STATUS, own]);
+            }
+        } else if set != current {
+            return Ok(commands);
+        }
+        commands.push(cmd!["set-option", "-w", "-t", self.window, "pane-border-status", value]);
+        commands.push(cmd!["set-option", "-w", "-t", self.window, BORDER_STATUS, value]);
+        Ok(commands)
+    }
+
+    /// The status a tiled window shows in zoom mode: a title line between splits.
+    fn tiled_border_status(&self) -> R<Vec<Cmd>> {
+        self.border_status(if self.panes.len() > 1 { "top" } else { "off" })
     }
 
     // Actions ------------------------------------------------------------------
@@ -349,13 +377,11 @@ impl<'a> Manager<'a> {
         ranked.sort_by_key(|n| if n.active { -1 } else { n.last.unwrap_or(1_000_000) });
         let order: Vec<String> = ranked.iter().map(|n| n.id.clone()).collect();
         let state = State {
-            version: Value::Int(1), root: Some(self.tiled.clone()), active: Some(self.active()?),
+            version: Value::Int(2), root: Some(self.tiled.clone()), active: Some(self.active()?),
             last: order.get(1).cloned(), order, zoom: None, extra: Vec::new(),
         };
-        let extra = [("pane-border-status", "off"), ("pane-border-lines", "single"), ("pane-border-indicators", "off")]
-            .iter()
-            .map(|(option, value)| cmd!["set-option", "-w", "-t", self.window, option, value])
-            .collect();
+        // Frames have their own edges: no title line.
+        let extra = self.border_status("off")?;
         self.frame(state, extra)
     }
 
@@ -365,8 +391,21 @@ impl<'a> Manager<'a> {
         let mut commands = vec![
             cmd!["set-option", "-wu", "-t", self.window, STATE],
             cmd!["set-option", "-wu", "-t", self.window, ACTIVE],
-            self.border_status(),
         ];
+        // pane-border-status is the plugin's in zoom mode too: set for the
+        // tiled window, if it is still the plugin's.
+        commands.extend(self.tiled_border_status()?);
+        if state.version == Value::Int(1) {
+            // Enabled by an earlier version, which also set these: undo them
+            // unless the user has changed them since.
+            let format = LEGACY_WINDOW_OPTIONS.map(|(option, _)| format!("#{{{option}}}")).join("\t");
+            let now = self.t.text(&cmd!["display-message", "-p", "-t", self.window, format])?;
+            for ((option, value), current) in LEGACY_WINDOW_OPTIONS.iter().zip(now.split('\t')) {
+                if current == *value {
+                    commands.push(cmd!["set-option", "-wu", "-t", self.window, option]);
+                }
+            }
+        }
         commands.extend(self.unframed_command());
         self.finish(commands)
     }
@@ -626,6 +665,8 @@ impl<'a> Manager<'a> {
         }
         self.t.unset(&self.window, STATE);
         self.t.unset(&self.window, ACTIVE);
-        self.t.run_unchecked(&self.border_status());
+        for command in self.tiled_border_status().unwrap_or_default() {
+            self.t.run_unchecked(&command);
+        }
     }
 }
