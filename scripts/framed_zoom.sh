@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # tmux 3.8+: float the existing pane, never replace its running process.
+#   framed_zoom.sh PANE              frame PANE, or return its window's frame
+#   framed_zoom.sh WINDOW --return   only return WINDOW's frame, if it has one
+#   framed_zoom.sh WINDOW --resize   fit WINDOW's frame to the window
 set -eu
+source "$(dirname "${BASH_SOURCE[0]}")/owned.sh"
 pane="${1:?Expected pane ID}"
 window="$(tmux display-message -p -t "$pane" '#{window_id}')"
 frame="$(tmux show-option -wqv -t "$window" @pane_clarity_frame_pane)"
@@ -20,9 +24,7 @@ clear_state() {
   tmux set-option -wu -t "$window" @pane_clarity_frame_pane
   tmux set-option -wu -t "$window" @pane_clarity_frame_layout
   tmux set-option -wu -t "$window" @pane_clarity_frame_members
-  tmux if-shell -F -t "$window" '#{>:#{window_panes},1}' \
-    "set-option -w -t $window pane-border-status top" \
-    "set-option -w -t $window pane-border-status off"
+  set_border_status "$window" "$(tiled_border_status "$window")"
 }
 
 members() {
@@ -60,6 +62,9 @@ if [ -n "$frame" ]; then
   tmux select-pane -t "$frame"
   exit 0
 fi
+
+# Uninstall returns frames; it never opens one.
+[ "${2:-}" = --return ] && exit 0
 
 # Do not repurpose an unrelated floating pane or its return location.
 if [ "$(tmux display-message -p -t "$pane" '#{pane_floating_flag}')" = 1 ]; then
