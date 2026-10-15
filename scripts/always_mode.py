@@ -95,15 +95,37 @@ def bind(tmux, prefix, tokens):
     tmux.run("source-file", "-", input=shlex.join(["bind-key", *prefix]) + " " + render(split_commands(tokens)) + "\n")
 
 
+def current_binding(tmux, table, key):
+    return tmux.run("list-keys", "-T", table, key, check=False).stdout.strip()
+
+
+def adapted_here(item, line):
+    """Whether `line` (a key's binding now) is still the one enable gave it.
+    Entries saved by earlier versions don't record that: any binding that
+    runs the engine is."""
+    if "adapted" in item:
+        return line == item["adapted"]
+    return "pane-clarity" in line
+
+
 def install_bindings(tmux):
     raw = tmux.text("show-option", "-gqv", SAVED)
     saved = {(item["table"], item["key"]): item for item in (json.loads(raw) if raw else [])}
 
+    def store():
+        tmux.run("set-option", "-g", SAVED, json.dumps(list(saved.values())))
+
     def backup(table, key, line):
-        if (table, key) in saved:
+        item = saved.get((table, key))
+        if item and adapted_here(item, line):
             return  # keep the original, not an earlier adapted version
+        # New, or the user has bound it again since: that is the original now.
         saved[(table, key)] = {"table": table, "key": key, "line": line}
-        tmux.run("set-option", "-g", SAVED, json.dumps(list(saved.values())))  # before mutating
+        store()  # before mutating
+
+    def adapted(table, key):
+        saved[(table, key)]["adapted"] = current_binding(tmux, table, key)
+        store()
 
     for table in TABLES:
         for line in tmux.text("list-keys", "-T", table).splitlines():
@@ -129,10 +151,11 @@ def install_bindings(tmux):
                 tmux.run("source-file", "-", input=line + "\n")
                 if saved[(table, prefix[-1])]["line"] == line:  # newly backed up
                     del saved[(table, prefix[-1])]
-                    tmux.run("set-option", "-g", SAVED, json.dumps(list(saved.values())))
+                    store()
+            else:
+                adapted(table, prefix[-1])
     for key in MOUSE_KEYS:
-        if ("root", key) not in saved:
-            backup("root", key, tmux.run("list-keys", "-T", "root", key, check=False).stdout.strip())
+        backup("root", key, current_binding(tmux, "root", key))
         resize = invoke("mouse-resize", "#{mouse_pane}")
         if key == "MouseDragEnd1Pane":
             # A drag inside a pane belongs to the program when it tracks the
@@ -142,6 +165,7 @@ def install_bindings(tmux):
             # own selection (e.g. pi) never finished it and never copied.
             resize = ["if-shell", "-F", MOUSE_TO_PANE, "send-keys -M", render([resize])]
         tmux.run("bind-key", "-T", "root", key, *resize)
+        adapted("root", key)
 
 
 def install(tmux):
@@ -172,17 +196,30 @@ def install(tmux):
 
 
 def disable(tmux):
+    """Return every window to tiled panes, then remove the adapters. While any
+    window is still framed (e.g. the engine binary is gone), change nothing
+    else: its bindings and hooks are what lets it recover, and running this
+    again once the engine is back finishes the job."""
     failed = False
-    for window in tmux.windows():
-        if tmux.get(window, common.STATE):
-            try:
-                failed |= bool(common.run_engine(["disable", window], flags=tmux.flags))
-            except common.TmuxError:
-                failed = True  # no engine binary: bindings and hooks are still restored
+    framed = [window for window in tmux.windows() if tmux.get(window, common.STATE)]
+    if framed and not common.built():
+        print(f"pane clarity: always mode left on: {framed[0]} is framed and the engine is missing; "
+              f"run `cargo build --release` in {common.ROOT}, then try again", file=sys.stderr)
+        return 1
+    for window in framed:
+        # A failed action falls back to tiled panes on its own.
+        failed |= bool(common.run_engine(["disable", window], flags=tmux.flags))
+    still = [window for window in framed if tmux.get(window, common.STATE)]
+    if still:
+        print(f"pane clarity: always mode left on: {', '.join(still)} could not be returned to tiled panes",
+              file=sys.stderr)
+        return 1
     for hook in HOOKS:
         tmux.run("set-hook", "-gu", f"{hook}[{INDEX}]")
     raw = tmux.text("show-option", "-gqv", SAVED)
     for item in json.loads(raw) if raw else []:
+        if not adapted_here(item, current_binding(tmux, item["table"], item["key"])):
+            continue  # the user has bound or unbound it since: theirs
         if item["line"]:
             tmux.run("source-file", "-", input=item["line"] + "\n")
         else:
