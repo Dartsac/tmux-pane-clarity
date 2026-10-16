@@ -3,6 +3,7 @@
 import contextlib
 import json
 import os
+import re
 from pathlib import Path
 import shlex
 import subprocess
@@ -16,30 +17,83 @@ INSTALLED = "@pane_clarity_resurrect_installed"
 KINDS = ("post-save-layout", "pre-restore-all", "post-restore-all")
 
 
+PLUGIN_HOOKS = "@pane_clarity_resurrect_hooks"  # every hook command it has set
+SCRIPT = str(Path(__file__).resolve())
+PYTHON = re.compile(r"python[0-9.]*", re.IGNORECASE)
+
+
+def ours(tmux, hook):
+    """Whether `hook` is one this plugin set: exactly a command recorded when
+    it was set, by this copy or any other (a plugin moved or copied elsewhere
+    still has the old copy's hook set). Earlier versions recorded none: theirs
+    runs this very script, or another copy of this plugin's resurrect.py (an
+    upgrade installed elsewhere), which is known by the option it chains with,
+    or a scripts/resurrect.py deleted since, while the plugin is installed here
+    (that copy was removed before the upgrade loaded; its hook can't run)."""
+    if not hook:
+        return False
+    if hook in tmux.text("show-option", "-gqv", PLUGIN_HOOKS).split("\n"):
+        return True
+    try:
+        tokens = shlex.split(hook)
+    except ValueError:
+        return False
+    # The command this plugin writes: Python (sys.executable) running a script
+    # with the hook's kind. Anything else is the user's, whatever it names.
+    if len(tokens) != 3 or tokens[2] not in KINDS or not PYTHON.fullmatch(os.path.basename(tokens[0])):
+        return False
+    if os.path.realpath(tokens[1]) == SCRIPT:
+        return True
+    try:
+        with open(tokens[1], encoding="utf-8", errors="replace") as script:
+            return f'PREFIX = "{PREFIX}"' in script.read(1 << 16)
+    except FileNotFoundError:
+        return (tokens[1].endswith("/scripts/resurrect.py")
+                and tmux.text("show-option", "-gqv", INSTALLED) == "1")
+    except OSError:
+        return False
+
+
+def predecessor(tmux, kind):
+    """The hook to chain to: never a plugin hook, which would chain back."""
+    hook = tmux.text("show-option", "-gqv", PREFIX + kind)
+    return "" if ours(tmux, hook) else hook
+
+
 def install(tmux):
-    """Chain onto existing resurrect hooks (saved once, restored by uninstall)."""
-    if tmux.text("show-option", "-gqv", INSTALLED) != "1":
-        for kind in KINDS:
-            tmux.run("set-option", "-g", PREFIX + kind, tmux.text("show-option", "-gqv", "@resurrect-hook-" + kind))
-        tmux.run("set-option", "-g", INSTALLED, "1")
+    """Chain onto existing resurrect hooks (restored by uninstall). A hook set
+    since the last install replaces the saved one: it is the one to chain."""
     for kind in KINDS:
-        tmux.run("set-option", "-g", "@resurrect-hook-" + kind, shlex.join([sys.executable, str(Path(__file__).resolve()), kind]))
+        current = tmux.text("show-option", "-gqv", "@resurrect-hook-" + kind)
+        saved = current if not ours(tmux, current) else predecessor(tmux, kind)
+        tmux.run("set-option", "-g" if saved else "-gu", PREFIX + kind, *([saved] if saved else []))
+    tmux.run("set-option", "-g", INSTALLED, "1")
+    recorded = [hook for hook in tmux.text("show-option", "-gqv", PLUGIN_HOOKS).split("\n") if hook]
+    for kind in KINDS:
+        hook = shlex.join([sys.executable, SCRIPT, kind])
+        if hook not in recorded:
+            recorded.append(hook)
+            tmux.run("set-option", "-g", PLUGIN_HOOKS, "\n".join(recorded))  # before setting it
+        tmux.run("set-option", "-g", "@resurrect-hook-" + kind, hook)
 
 
 def uninstall(tmux):
     if tmux.text("show-option", "-gqv", INSTALLED) != "1":
         return
     for kind in KINDS:
-        old = tmux.text("show-option", "-gqv", PREFIX + kind)
-        tmux.run("set-option", "-g" if old else "-gu", "@resurrect-hook-" + kind, *([old] if old else []))
+        old = predecessor(tmux, kind)
+        # Unless the user has set the hook since.
+        if ours(tmux, tmux.text("show-option", "-gqv", "@resurrect-hook-" + kind)):
+            tmux.run("set-option", "-g" if old else "-gu", "@resurrect-hook-" + kind, *([old] if old else []))
         tmux.run("set-option", "-gu", PREFIX + kind)
     tmux.run("set-option", "-gu", INSTALLED)
+    tmux.run("set-option", "-gu", PLUGIN_HOOKS)
 
 
 def run_previous(tmux, kind, args):
     """Run the hook this one replaced; returns whether it succeeded. Its
     failure must not skip this plugin's own step (e.g. leave framing paused)."""
-    old = tmux.text("show-option", "-gqv", PREFIX + kind)
+    old = predecessor(tmux, kind)
     return not old or subprocess.run(["/bin/bash", "-c", old + ' "$@"', "pane-clarity", *args]).returncode == 0
 
 
