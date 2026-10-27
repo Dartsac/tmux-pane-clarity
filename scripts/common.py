@@ -22,18 +22,29 @@ PANE_FORMAT = ("#{pane_id}\t#{pane_index}\t#{pane_floating_flag}\t#{pane_active}
                "\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}")
 
 
+def _is_adapter(path):
+    """Whether path is a pane clarity bin/tmux adapter: this copy's or another's
+    (every copy has tmux-pane-clarity.tmux beside bin/). As the real tmux, one
+    would exec itself (or another) forever, or start a second engine that
+    waits on this one's lock."""
+    plugin = os.path.dirname(os.path.dirname(os.path.realpath(path)))
+    return os.path.isfile(os.path.join(plugin, "tmux-pane-clarity.tmux"))
+
+
 def _real_tmux():
-    """$PANE_CLARITY_REAL_TMUX, or the first tmux on PATH that is not bin/tmux."""
+    """$PANE_CLARITY_REAL_TMUX, or the first tmux on PATH that is not an adapter."""
     configured = os.environ.get("PANE_CLARITY_REAL_TMUX")
-    if configured:
+    if configured and not _is_adapter(configured):
         return configured
-    adapter = os.path.join(ROOT, "bin")
     for directory in os.environ.get("PATH", "").split(os.pathsep):
+        # Relative entries (e.g. "bin") depend on the cwd and can name the adapter.
+        if not os.path.isabs(directory):
+            continue
         candidate = os.path.join(directory, "tmux")
-        if (directory and os.path.realpath(directory) != adapter
-                and os.path.isfile(candidate) and os.access(candidate, os.X_OK)):
+        if (os.path.isfile(candidate) and os.access(candidate, os.X_OK)
+                and not _is_adapter(candidate)):
             return candidate
-    raise RuntimeError("Cannot find the real tmux binary outside pane clarity's adapter directory.")
+    raise RuntimeError("Cannot find the real tmux binary: only pane clarity adapters on PATH.")
 
 
 REAL_TMUX = _real_tmux()

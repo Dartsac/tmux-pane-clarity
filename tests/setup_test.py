@@ -533,6 +533,43 @@ class SetupTest(unittest.TestCase):
         self.assertEqual(self.option("@pane_clarity_error"), "")
 
     # Finding the real tmux --------------------------------------------------------
+    def test_no_copy_takes_another_copys_adapter_for_the_real_tmux(self):
+        other, copy = self.unbuilt_copy(), self.engine_copy()
+        # The other copy's adapter says when it runs (it is still an adapter by
+        # location: tmux-pane-clarity.tmux beside bin/), so a wrong choice shows
+        # without starting a loop between two adapters.
+        (other / "bin/tmux").write_text("#!/bin/sh\necho OTHER-ADAPTER\n")
+        version = subprocess.run(["tmux", "-V"], capture_output=True, text=True).stdout.strip()
+        # A symlink to the other copy's adapter file, in a folder of its own.
+        linked = Path(tempfile.mkdtemp(dir=self.temp, prefix="linked-"))
+        (linked / "tmux").symlink_to(other / "bin/tmux")
+
+        def run(*args, path, real=None, cwd=None):
+            env = {k: v for k, v in os.environ.items() if k != "PANE_CLARITY_REAL_TMUX"}
+            env["PATH"] = path
+            if real:
+                env["PANE_CLARITY_REAL_TMUX"] = real
+            return subprocess.run(args, env=env, cwd=cwd, capture_output=True, text=True, timeout=10)
+
+        for name, command in (("shell adapter", [f"{copy}/bin/tmux", "-V"]),
+                              ("engine", [f"{copy}/target/release/pane-clarity", "tmux", "-V"]),
+                              ("python", ["python3", "-c", "import common, subprocess; "
+                                          "subprocess.run([common.REAL_TMUX, '-V'])"])):
+            for layout, adapter in (("bin folder", other / "bin"), ("symlinked file", linked)):
+                with self.subTest(name, layout=layout):
+                    cwd = copy / "scripts" if name == "python" else None
+                    path = f"{adapter}{os.pathsep}{copy}/bin{os.pathsep}{SYSTEM_PATH}"
+                    self.assertEqual(run(*command, path=path, cwd=cwd).stdout.strip(), version)
+                    # ... nor when configured as the real one.
+                    result = run(*command, path=path, cwd=cwd, real=f"{adapter}/tmux")
+                    self.assertEqual(result.stdout.strip(), version)
+        # Only adapters on PATH: an error, not a loop or another adapter.
+        for adapter in (other / "bin", linked):
+            with self.subTest("only adapters", adapter=adapter.name):
+                result = run(f"{copy}/bin/tmux", "-V", path=f"{adapter}{os.pathsep}{copy}/bin")
+                self.assertEqual((result.returncode, result.stdout), (127, ""))
+                self.assertIn("only pane clarity adapters on PATH", result.stderr)
+
     # Integrations ---------------------------------------------------------------
     def recorder(self, name):
         """A script that writes its arguments, one per line, to a file."""

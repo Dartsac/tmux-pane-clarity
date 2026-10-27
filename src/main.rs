@@ -61,26 +61,35 @@ pub fn is_managed(name: &str) -> bool {
     ALIASES.iter().any(|(_, full)| *full == name)
 }
 
+/// Whether `path` is a pane clarity bin/tmux adapter: this copy's or another's
+/// (every copy has tmux-pane-clarity.tmux beside bin/). As the real tmux, one
+/// would exec itself (or another) forever, or start a second engine that
+/// waits on this one's lock.
+fn is_adapter(path: &std::path::Path) -> bool {
+    path.canonicalize()
+        .ok()
+        .and_then(|tmux| Some(tmux.parent()?.parent()?.join("tmux-pane-clarity.tmux").is_file()))
+        .unwrap_or(false)
+}
+
 /// The real tmux: $PANE_CLARITY_REAL_TMUX, or the first `tmux` on PATH that
-/// is not this plugin's bin/tmux adapter.
+/// is not an adapter.
 fn real_tmux() -> Option<String> {
     if let Ok(configured) = std::env::var("PANE_CLARITY_REAL_TMUX") {
-        if !configured.is_empty() {
+        if !configured.is_empty() && !is_adapter(configured.as_ref()) {
             return Some(configured);
         }
     }
-    // <plugin>/target/release/pane-clarity -> <plugin>/bin
-    let adapter = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.canonicalize().ok())
-        .and_then(|exe| Some(exe.parent()?.parent()?.parent()?.join("bin")))
-        .and_then(|bin| bin.canonicalize().ok());
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path).find_map(|dir| {
-        if dir.as_os_str().is_empty() || (adapter.is_some() && dir.canonicalize().ok() == adapter) {
+        // Relative entries (e.g. "bin") depend on the cwd and can name an adapter.
+        if !dir.is_absolute() {
             return None;
         }
         let candidate = dir.join("tmux");
+        if is_adapter(&candidate) {
+            return None;
+        }
         let executable = std::fs::metadata(&candidate)
             .is_ok_and(|m| m.is_file() && std::os::unix::fs::PermissionsExt::mode(&m.permissions()) & 0o111 != 0);
         executable.then(|| candidate.to_string_lossy().into_owned())
@@ -440,7 +449,7 @@ fn main() {
     std::panic::set_hook(Box::new(|_| {}));
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let Some(real) = real_tmux() else {
-        eprintln!("pane-clarity: cannot find the real tmux binary outside the adapter directory");
+        eprintln!("pane-clarity: cannot find the real tmux binary (only pane clarity adapters on PATH)");
         std::process::exit(127);
     };
     if argv.first().map(String::as_str) == Some("tmux") {

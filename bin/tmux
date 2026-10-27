@@ -4,18 +4,40 @@
 # always-framed); everything else is exec'd straight to the real tmux. Never replace the real
 # tmux binary with this file.
 self=$0
+# Whether $1 is a pane clarity adapter: this one, or another copy's (every
+# copy has tmux-pane-clarity.tmux beside bin/), also through a symlink to the
+# file itself. As the "real" tmux, one would exec itself or the other forever
+# (same PID, so nothing ever exits), or start a second engine that waits on
+# this one's lock.
+is_adapter() {
+  [ "$1" -ef "$self" ] && return 0
+  file=$1 hops=0
+  while [ -L "$file" ] && [ "$hops" -lt 40 ]; do
+    # Not only from PATH, which may hold nothing but adapters.
+    link=$( { /usr/bin/readlink "$file" || /bin/readlink "$file" || readlink "$file"; } 2>/dev/null ) || break
+    case $link in /*) file=$link ;; *) file=${file%/*}/$link ;; esac
+    hops=$((hops + 1))
+  done
+  [ -f "${file%/*}/../tmux-pane-clarity.tmux" ]
+}
 real=${PANE_CLARITY_REAL_TMUX:-}
+if [ -n "$real" ] && is_adapter "$real"; then
+  real=  # search PATH instead
+fi
 if [ -z "$real" ]; then
   set -f; old_ifs=$IFS; IFS=:
   for dir in $PATH; do
-    if [ -n "$dir" ] && [ -x "$dir/tmux" ] && ! [ "$dir/tmux" -ef "$self" ]; then
+    # Relative entries (e.g. "bin") resolve against the cwd and can land on
+    # this adapter, so only absolute directories are considered.
+    case $dir in /*) ;; *) continue ;; esac
+    if [ -x "$dir/tmux" ] && ! is_adapter "$dir/tmux"; then
       real=$dir/tmux; break
     fi
   done
   IFS=$old_ifs; set +f
 fi
 if [ -z "$real" ]; then
-  echo "pane-clarity: cannot find the real tmux binary" >&2
+  echo "pane-clarity: cannot find the real tmux binary (only pane clarity adapters on PATH)" >&2
   exit 127
 fi
 

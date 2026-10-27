@@ -179,7 +179,10 @@ and are plain tmux elsewhere.
 - **Everything else** (vim-tmux-navigator, scripts, other tools): put the
   adapter's directory first on `PATH`, e.g. `fish_add_path --prepend
   ~/.tmux/plugins/tmux-pane-clarity/bin`. The adapter finds the real tmux further
-  along `PATH`; each tmux call then costs one extra `sh` start.
+  along `PATH`; each tmux call then costs one extra `sh` start. It skips
+  relative `PATH` entries and every pane clarity adapter (any copy's: a
+  `bin/tmux` with `tmux-pane-clarity.tmux` beside its folder, directly or
+  through symlinks), and fails with an error if nothing else is left.
 
 ### tmux-resurrect / continuum
 
