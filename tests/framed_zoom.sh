@@ -4,8 +4,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOCKET="clarity-frame-test-$$"
 unset TMUX
 tmux -L "$SOCKET" -f /dev/null new-session -d -s test -x 100 -y 32
-trap 'tmux -L "$SOCKET" kill-server 2>/dev/null || true' EXIT
-export TMUX="$(tmux -L "$SOCKET" display-message -p '#{socket_path}'),0,0"
+SOCKET_PATH="$(tmux -L "$SOCKET" display-message -p '#{socket_path}')"
+# kill-server leaves the socket file behind, and the engine its lock.
+trap 'tmux -L "$SOCKET" kill-server 2>/dev/null || true; rm -f "$SOCKET_PATH" "$SOCKET_PATH.clarity-lock"' EXIT
+export TMUX="$SOCKET_PATH,0,0"
 bash "$ROOT/tmux-pane-clarity.tmux"
 tmux list-keys -T prefix z | grep -q framed_zoom.sh
 

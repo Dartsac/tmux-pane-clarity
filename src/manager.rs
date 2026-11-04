@@ -451,7 +451,7 @@ impl<'a> Manager<'a> {
         let dest = if direction == "-l" {
             state.last.clone()
         } else {
-            tree::neighbour(&boxes, &self.target, direction, self.size, &state.order)?
+            tree::neighbor(&boxes, &self.target, direction, self.size, &state.order)?
         };
         if let Some(dest) = dest {
             if lookup(&boxes, &dest).is_some() && dest != active {
@@ -629,7 +629,7 @@ impl<'a> Manager<'a> {
         if !args.iter().any(|a| a == "-t" || (a.starts_with("-t") && a.len() > 2)) {
             args.splice(0..0, cmd!["-t", self.target]);
         }
-        // Closing a pane needs no tiling: its frame's space goes to a neighbour.
+        // Closing a pane needs no tiling: its frame's space goes to a neighbor.
         self.native(name, &args, name != "kill-pane")
     }
 

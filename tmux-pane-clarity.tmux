@@ -71,7 +71,7 @@ fi
 tmux set-option -g @pane_clarity_dir "$CURRENT_DIR"
 tmux set-environment -g PANE_CLARITY_TMUX "$CURRENT_DIR/bin/tmux"
 
-# Never set window-style/window-active-style or the active border colour: the
+# Never set window-style/window-active-style or the active border color: the
 # theme owns those. Hide the pane-status line while a pane is in framed zoom
 # (the float has its own edges) and in always-framed windows.
 border_style="$(option @pane_clarity_border_style 'fg=#44475a')"

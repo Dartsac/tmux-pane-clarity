@@ -6,7 +6,7 @@ use crate::{err, R};
 
 pub const MIN: i64 = 3; // one content cell plus both frame edges
 
-/// Cells between neighbouring boxes, per split kind: (`h`, `v`).
+/// Cells between neighboring boxes, per split kind: (`h`, `v`).
 /// The stored tree uses tmux's tiled geometry (one separator cell). Rendered
 /// frames keep the separator column between side-by-side frames, but stacked
 /// frames touch: a row is about twice as tall as a column is wide.
@@ -360,7 +360,7 @@ pub fn move_edge(root: &mut Node, pane: &str, kind: u8, after: bool, delta: i64)
 
 /// tmux's directional choice: the most recently used pane sharing the
 /// requested edge, with wraparound. Not chosen by cursor position.
-pub fn neighbour(tree: &Boxes, source: &str, direction: &str, size: (i64, i64), order: &[String]) -> R<Option<String>> {
+pub fn neighbor(tree: &Boxes, source: &str, direction: &str, size: (i64, i64), order: &[String]) -> R<Option<String>> {
     let src = *lookup(tree, source).ok_or_else(|| crate::Error::Tmux(format!("pane {source} is not in the layout")))?;
     let horizontal = matches!(direction, "-L" | "-R");
     let pos = |r: &Rect| if horizontal { r.x } else { r.y };

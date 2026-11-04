@@ -1,6 +1,6 @@
 # tmux-pane-clarity
 
-Thin, complete pane frames without changing pane backgrounds or text colours.
+Thin, complete pane frames without changing pane backgrounds or text colors.
 
 ```tmux
 set -g @plugin 'Dartsac/tmux-pane-clarity'
@@ -9,7 +9,7 @@ set -g @pane_clarity_mode 'zoom'   # default; or 'always'
 
 Set the mode before TPM initialization; install with prefix + I. The plugin
 owns border lines, indicators, format and top-border visibility. It never sets
-`window-style`, `window-active-style` or the active border colour (your theme's).
+`window-style`, `window-active-style` or the active border color (your theme's).
 Each window's `pane-border-status` is the only window option it sets: one you
 set on a window yourself after the plugin has is yours, and it stays.
 
@@ -90,8 +90,8 @@ How operations are handled:
 
 - **Geometry only, no retiling** (one batched tmux call): directional and last-pane
   navigation (tmux's MRU rule at T-junctions, wraparound), zoom, directional
-  `resize-pane` (same border/neighbour semantics as tiled tmux), closing panes
-  (space goes to the neighbour, as in tmux), mouse border drags (corners
+  `resize-pane` (same border/neighbor semantics as tiled tmux), closing panes
+  (space goes to the neighbor, as in tmux), mouse border drags (corners
   included; dragging a frame without resizing snaps it back), window growth.
 - **Native round trip** (panes briefly tiled, so apps redraw): `split-window`,
   `swap-pane`, `rotate-window`, `select-layout`/`next-layout` and non-directional
@@ -197,7 +197,7 @@ script: Python running that copy's `resurrect.py` (or, if the copy was deleted
 first, a `scripts/resurrect.py` that no longer exists), so upgrading into a new
 location is safe too. A hook that runs anything other than Python is yours.
 These hooks don't change how resurrect itself saves: overlapping saves (a manual
-save during an autosave, say) are still resurrect's own behaviour.
+save during an autosave, say) are still resurrect's own behavior.
 
 ### Layout engine and performance
 
@@ -219,7 +219,7 @@ tmux runs as well:
 Older bindings written by this plugin, including those of its earlier Python
 engine, are rewritten for the current engine on reload.
 
-### Failure behaviour
+### Failure behavior
 
 Operations are serialized per server (a lock next to the tmux socket). Recovery
 state is saved before every layout mutation. If a window becomes too small for

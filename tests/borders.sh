@@ -4,8 +4,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOCKET="clarity-borders-$$"
 unset TMUX
 tmux -L "$SOCKET" -f /dev/null new-session -d -s test -x 120 -y 40
-trap 'tmux -L "$SOCKET" kill-server 2>/dev/null || true' EXIT
-export TMUX="$(tmux -L "$SOCKET" display-message -p '#{socket_path}'),0,0"
+SOCKET_PATH="$(tmux -L "$SOCKET" display-message -p '#{socket_path}')"
+# kill-server leaves the socket file behind, and the engine its lock.
+trap 'tmux -L "$SOCKET" kill-server 2>/dev/null || true; rm -f "$SOCKET_PATH" "$SOCKET_PATH.clarity-lock"' EXIT
+export TMUX="$SOCKET_PATH,0,0"
 assert_border() {
   [ "$(tmux show-option -wAqv -t "$1" pane-border-status)" = "$2" ]
 }
@@ -40,4 +42,4 @@ bash "$ROOT/tmux-pane-clarity.tmux"
 [ "$(tmux show-option -gqv pane-border-indicators)" = off ]
 [ "$(tmux show-option -gqv @other_hook)" = preserved ]
 [ "$(tmux show-hooks -g window-layout-changed | grep -c '\[9431\]')" = 1 ]
-printf 'PASS: borders, zoom, background windows, close, reload, other hooks; pane styles and active colour unchanged\n'
+printf 'PASS: borders, zoom, background windows, close, reload, other hooks; pane styles and active color unchanged\n'

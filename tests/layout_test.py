@@ -17,6 +17,20 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import common  # noqa: E402
 import geometry  # noqa: E402  (independent reference for frame positions)
 
+SOCKET_PREFIX = f"clarity-layout-test-{os.getpid()}-"
+
+
+def remove_socket(path):
+    """kill-server leaves the socket file behind, and the engine its lock."""
+    path.unlink(missing_ok=True)
+    path.with_name(path.name + ".clarity-lock").unlink(missing_ok=True)
+
+
+def tearDownModule():
+    # Every test removes its server's socket and lock files (remove_socket).
+    left = [p.name for p in FramesTest.socket_dir.glob(SOCKET_PREFIX + "*")] if FramesTest.socket_dir else []
+    assert not left, f"test sockets left behind: {left}"
+
 
 def resurrect_prefix(kind):
     """Where the resurrect hook that pane clarity chains onto is kept."""
@@ -25,10 +39,14 @@ def resurrect_prefix(kind):
 
 
 class FramesTest(unittest.TestCase):
+    socket_dir = None  # where tmux puts the -L sockets, once a test has started one
+
     def setUp(self):
-        self.socket = f"clarity-layout-test-{os.getpid()}-{self.id().split('.')[-1]}"
+        self.socket = SOCKET_PREFIX + self.id().split('.')[-1]
         self.tmux = common.Tmux(["-L", self.socket])
         self.tmux.run("-f", "/dev/null", "new-session", "-d", "-s", "test", "-x", 120, "-y", 40)
+        self.socket_path = Path(self.tmux.text("display-message", "-p", "#{socket_path}"))
+        FramesTest.socket_dir = self.socket_path.parent
         self.window = self.tmux.fmt("test:0", "#{window_id}")
         self.pane = self.tmux.fmt(self.window, "#{pane_id}")
         self.tmux.set(self.window, "pane-border-status", "off")
@@ -36,6 +54,7 @@ class FramesTest(unittest.TestCase):
 
     def tearDown(self):
         self.tmux.run("kill-server", check=False)
+        remove_socket(self.socket_path)
 
     def run_manager(self, action, target=None, *args, success=True):
         code = common.run_engine([action, target or self.pane, *args], flags=["-L", self.socket])
@@ -238,6 +257,7 @@ class FramesTest(unittest.TestCase):
             self.wait_for(lambda: all(p["floating"] for p in empty.panes(window).values()))
         finally:
             empty.run("kill-server", check=False)
+            remove_socket(self.socket_path.with_name(self.socket + "-empty"))
 
     def test_drag_release_reaches_mouse_tracking_program(self):
         # Programs that track the mouse (pi, other TUIs) select and copy
