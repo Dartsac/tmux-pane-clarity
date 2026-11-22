@@ -2,6 +2,17 @@
 
 Thin, complete pane frames without changing pane backgrounds or text colors.
 
+![Neovim, a test run and a shell in tmux, each pane in its own thin frame, the active one in green](docs/images/dev-session.png)
+
+Native tmux draws one shared divider between panes, so it's hard to see where a
+pane ends or which one is active. pane-clarity frames every pane (`always`
+mode), or only the pane you zoom with prefix + z (`zoom` mode, the default).
+
+![The same three panes in native tmux, with shared dividers, and with pane-clarity, with a frame per pane](docs/images/before-after.png)
+
+<sub>Screenshots: Ghostty with the Dracula PRO theme. The active frame takes your
+theme's color; the others use `@pane_clarity_border_style` (below).</sub>
+
 ```tmux
 set -g @plugin 'Dartsac/tmux-pane-clarity'
 set -g @pane_clarity_mode 'zoom'   # default; or 'always'
@@ -59,7 +70,11 @@ active pane to a full-window frame and restores the saved splits on the second
 press (scaled if the terminal was resized; kept as-is if panes changed while
 framed). The running program is never restarted. Older tmux keeps native zoom.
 
+![A split window, and the same window after prefix + z, with the active pane filling it inside a frame](docs/images/framed-zoom.png)
+
 ## `always` mode: every pane framed
+
+![Four steps: one unframed pane, a split with both panes framed, a second split, and back to one unframed pane](docs/images/lifecycle.png)
 
 Requires **tmux 3.8 (floating panes, version-2 JSON layouts), Rust 1.82+**
 (cargo, to build the layout engine; [rustup.rs](https://rustup.rs)) **and Python
